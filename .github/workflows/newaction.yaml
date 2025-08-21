@@ -1,0 +1,60 @@
+name: go-test-and-docker
+#события, которые вызывают запуск рабочего процесса
+on: push
+#задания
+jobs:
+  # Задание на выполнение тестов
+  test:
+    runs-on: ubuntu-latest
+    container: golang:1.23.4
+    steps:
+      - name: Checkout
+      # Проверяем репозиторий для доступа к нему рабочего процесса
+        uses: actions/checkout@v5
+
+      - name: Run Unit Tests
+      # Запускаем тесты
+        run: GOOS=linux GOARCH=amd64 go test
+
+      - name: Vet
+      # проверка кода на наличие ошибок
+        run: |
+          go vet ./... 
+
+  # Задание на публикацию приложения в DockerHub
+  deploy:
+    name: Push Docker image to Docker Hub
+    runs-on: ubuntu-latest
+    # Задание будет запускаться только после успешного выполнения тестов
+    needs: test
+    # Задание запустится только в случае указания тегов для коммита
+    if: startsWith(github.ref, 'refs/tags')
+    steps:
+      - name: Checkout
+       # Проверяем репозиторий для доступа к нему рабочего процесса
+        uses: actions/checkout@v5
+
+      - name: Set up Docker buildx
+      # Создание и загрузка конструктора
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+      # Логинимся в DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_ACCESS_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5.5.1
+        with:
+          images: vessbi/sp12final
+
+      - name: Build and push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }} 
